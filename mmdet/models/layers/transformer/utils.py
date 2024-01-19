@@ -405,6 +405,10 @@ class PatchMerging(BaseModule):
                     (Merged_H, Merged_W).
         """
         B, L, C = x.shape
+
+        # print("\t-----PathMerging(downsample) x.shape = ", x.shape)
+        # print("input_size arg = ", input_size)
+
         assert isinstance(input_size, Sequence), f'Expect ' \
                                                  f'input_size is ' \
                                                  f'`Sequence` ' \

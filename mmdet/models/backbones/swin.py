@@ -87,9 +87,47 @@ class WindowMSA(BaseModule):
             mask (tensor | None, Optional): mask with shape of (num_windows,
                 Wh*Ww, Wh*Ww), value should be between (-inf, 0].
         """
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
-                                  C // self.num_heads).permute(2, 0, 3, 1, 4)
+        B, N, not_used_C = x.shape
+        
+        print("------------WindowMSA - x_shape Input", x.shape)
+        print(f"B={B}, N={N}, C={not_used_C}")
+        print("the qkv mod:", self.qkv.in_features, self.qkv.out_features, self.qkv)
+        
+
+        shape = self.qkv(torch.randn(B, N, not_used_C)).shape
+        print(" \t debug out shape only for qkv linear: ", shape)
+
+        qkv = self.qkv(x)
+        
+        # we infer the output shape directly from the qkv output
+        # embed_dims change after pruning (using Torch-Pruning)
+        _, _, C = qkv.shape
+        C = C // 3
+
+        # C = x.shape[2]
+
+        print("NEW C=", C)
+
+        print("qkv.shape = ", qkv.shape)
+        print("qkv.flatten.shape = ", qkv.flatten().shape)
+        print("self.embed_dims = ", self.embed_dims)
+        print("+++++ reshaping .... ", B, N, 3, 'self.num_heads=',self.num_heads, C // self.num_heads)
+        print(B, N, 3, self.num_heads, C // self.num_heads, " = ", B * N * 3 * self.num_heads * (C // self.num_heads))
+
+        print("self.num_heads = ", self.num_heads)
+        print("C = ", C)
+
+        qkv = qkv.reshape(B, N, 3, self.num_heads,
+                                  C // self.num_heads)
+        
+        print("qkv after reshape ", qkv.shape)
+
+        qkv = qkv.permute(2, 0, 3, 1, 4)
+
+        print("qkv after permute ", qkv.shape)
+
+        print("\t\tqkv.grad_fn >>>>>> ", qkv.grad_fn)
+
         # make torchscript happy (cannot use tensor as tuple)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
@@ -115,8 +153,14 @@ class WindowMSA(BaseModule):
         attn = self.attn_drop(attn)
 
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
+        
+        print("--proj input shape = ", x.shape)
+        # x = self.proj(x)
+        print("--proj output shape = ", x.shape)
+        
         x = self.proj_drop(x)
+        
+        print("------------WindowMSA - x_shape Output", x.shape, x.grad_fn)
         return x
 
     @staticmethod
@@ -180,6 +224,11 @@ class ShiftWindowMSA(BaseModule):
 
     def forward(self, query, hw_shape):
         B, L, C = query.shape
+
+        print("ShiftWindowMSA = query view: B, L, C= ", B, L, C)
+        print("\t hw_shape = ", hw_shape)
+        print("\t self.window_size = ", self.window_size)
+
         H, W = hw_shape
         assert L == H * W, 'input feature has wrong size'
         query = query.view(B, H, W, C)
@@ -231,6 +280,8 @@ class ShiftWindowMSA(BaseModule):
         # W-MSA/SW-MSA (nW*B, window_size*window_size, C)
         attn_windows = self.w_msa(query_windows, mask=attn_mask)
 
+        print("attn_windows.shape before merge = ", attn_windows.shape)
+
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size,
                                          self.window_size, C)
@@ -249,9 +300,15 @@ class ShiftWindowMSA(BaseModule):
         if pad_r > 0 or pad_b:
             x = x[:, :H, :W, :].contiguous()
 
+        print("x.shape before view = ", x.shape)
+        print("ShiftWindowMSA = before view B, H * W, C = ", B, H * W, C)
+        
         x = x.view(B, H * W, C)
 
         x = self.drop(x)
+        
+        print("------------ShiftWindowMSA - ", x.grad_fn)
+
         return x
 
     def window_reverse(self, windows, H, W):
@@ -371,11 +428,15 @@ class SwinBlock(BaseModule):
 
             return x
 
+        print("with_cp = ", self.with_cp)
+        print("x.requires_grad = ", x.requires_grad)
+        
         if self.with_cp and x.requires_grad:
             x = cp.checkpoint(_inner_forward, x)
         else:
             x = _inner_forward(x)
 
+        print("------------SwinBlock - ", x.grad_fn)
         return x
 
 
@@ -455,10 +516,19 @@ class SwinBlockSequence(BaseModule):
 
     def forward(self, x, hw_shape):
         for block in self.blocks:
+            
+            print("------------SwinBlockSequence - ", x.shape)
+            
             x = block(x, hw_shape)
+            
+            print("\t\tblock output: ", x.shape)
 
         if self.downsample:
             x_down, down_hw_shape = self.downsample(x, hw_shape)
+            
+            print("------------SwinBlockSequence/downsample - ", x_down.shape, x_down.grad_fn)
+            print("down_hw_shape = ", down_hw_shape)
+            
             return x_down, down_hw_shape, x, hw_shape
         else:
             return x, hw_shape, x, hw_shape
@@ -547,6 +617,7 @@ class SwinTransformer(BaseModule):
                  convert_weights=False,
                  frozen_stages=-1,
                  init_cfg=None):
+
         self.convert_weights = convert_weights
         self.frozen_stages = frozen_stages
         if isinstance(pretrain_img_size, int):
@@ -641,12 +712,18 @@ class SwinTransformer(BaseModule):
             layer_name = f'norm{i}'
             self.add_module(layer_name, layer)
 
+        # for p in self.parameters():
+        #     p.requires_grad_(True)
+
     def train(self, mode=True):
         """Convert the model into training mode while keep layers freezed."""
         super(SwinTransformer, self).train(mode)
         self._freeze_stages()
 
     def _freeze_stages(self):
+        
+        print(">>>>>>>>>>>>>>>>_freeze_stages = ", self.frozen_stages)
+        
         if self.frozen_stages >= 0:
             self.patch_embed.eval()
             for param in self.patch_embed.parameters():
@@ -656,7 +733,6 @@ class SwinTransformer(BaseModule):
             self.drop_after_pos.eval()
 
         for i in range(1, self.frozen_stages + 1):
-
             if (i - 1) in self.out_indices:
                 norm_layer = getattr(self, f'norm{i-1}')
                 norm_layer.eval()
@@ -744,6 +820,12 @@ class SwinTransformer(BaseModule):
             self.load_state_dict(state_dict, False)
 
     def forward(self, x):
+
+        print("-----NEW SwinTransformer FORWARD PASS ")
+        print("\n\n")
+        print("\t\tSwinTransformer input shape: ", x.shape)
+        print("\n")
+
         x, hw_shape = self.patch_embed(x)
 
         if self.use_abs_pos_embed:
@@ -753,14 +835,28 @@ class SwinTransformer(BaseModule):
         outs = []
         for i, stage in enumerate(self.stages):
             x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
+
+            print("x.shape = ",x.shape)
+            print("hw_shape = ", hw_shape)
+            print("stage out.shape = ", out.shape)
+            print("out_hw_shape = ", out_hw_shape)
+            print("stage = ", i, " / self.out_indices = ", self.out_indices)
+            print("self.num_features = ", self.num_features)
+
             if i in self.out_indices:
                 norm_layer = getattr(self, f'norm{i}')
                 out = norm_layer(out)
+                print("stage: ", i, " --- norm_layer out.shape = ", out.shape)
                 out = out.view(-1, *out_hw_shape,
                                self.num_features[i]).permute(0, 3, 1,
                                                              2).contiguous()
-                outs.append(out)
+                print(out.shape)
 
+                outs.append(out)
+                
+        print("------------SwinTransformer - ", [x.grad_fn for x in outs])
+        print("\n\n")
+                
         return outs
 
 
