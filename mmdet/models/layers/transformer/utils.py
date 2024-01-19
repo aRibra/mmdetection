@@ -406,9 +406,6 @@ class PatchMerging(BaseModule):
         """
         B, L, C = x.shape
 
-        # print("\t-----PathMerging(downsample) x.shape = ", x.shape)
-        # print("input_size arg = ", input_size)
-
         assert isinstance(input_size, Sequence), f'Expect ' \
                                                  f'input_size is ' \
                                                  f'`Sequence` ' \

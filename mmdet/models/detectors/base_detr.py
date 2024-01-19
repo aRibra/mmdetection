@@ -2,7 +2,7 @@
 from abc import ABCMeta, abstractmethod
 from typing import Dict, List, Tuple, Union
 
-from torch import Tensor, save
+from torch import Tensor
 
 from mmdet.registry import MODELS
 from mmdet.structures import OptSampleList, SampleList
@@ -70,8 +70,7 @@ class DetectionTransformer(BaseDetector, metaclass=ABCMeta):
         self.num_queries = num_queries
 
         # init model layers
-        print("backbone ConfigType  = ", backbone)
-        save(backbone, "/mnt/disks/ext/gd_checkpoints/mmdet_swin_t_backbone_cfg_dict.pth")
+        # torch.save(backbone, "/mnt/disks/ext/gd_checkpoints/mmdet_swin_t_backbone_cfg_dict.pth")
         self.backbone = MODELS.build(backbone)
         if neck is not None:
             self.neck = MODELS.build(neck)
