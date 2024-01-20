@@ -2,9 +2,16 @@ _base_ = [
     '../_base_/datasets/coco_detection.py',
     '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
 ]
-load_from = 'https://download.openmmlab.com/mmdetection/v3.0/grounding_dino/groundingdino_swint_ogc_mmdet-822d7e9d.pth'  # noqa
+# load_from = 'https://download.openmmlab.com/mmdetection/v3.0/grounding_dino/groundingdino_swint_ogc_mmdet-822d7e9d.pth'  # noqa
+
+# original mmdet GroundingDINO weights.
+# load_from = '/mnt/disks/ext/exps/mini_coco/grounding_dino_swin-t_finetune_custom_dataset/E1/best_coco_bbox_mAP_epoch_2.pth'
+
+chkpt = '/mnt/disks/ext/gd_checkpoints/GroundingDINO_coco_tiny_Pruned_25.pth'
+
 lang_model_name = 'bert-base-uncased'
 
+# Pruned with DepGraph (Torch-Pruning) https://arxiv.org/pdf/2301.12900.pdf
 model = dict(
     type='GroundingDINO',
     num_queries=900,
@@ -26,30 +33,13 @@ model = dict(
         add_pooling_layer=False,
     ),
     backbone=dict(
-        type='SwinTransformer',
-        embed_dims=96,
-        depths=[2, 2, 6, 2],
-        num_heads=[3, 6, 12, 24],
-        window_size=7,
-        mlp_ratio=4,
-        qkv_bias=True,
-        qk_scale=None,
-        drop_rate=0.,
-        attn_drop_rate=0.,
-        drop_path_rate=0.2,
-        patch_norm=True,
-        out_indices=(1, 2, 3),
-        with_cp=False,
-        convert_weights=False),
+        type='SwinTransformerPruned',
+        checkpoint="/mnt/disks/ext/gd_checkpoints/gd_backbone_and_neck_sequential_Pruned_25.pth"
+    ),
     neck=dict(
-        type='ChannelMapper',
-        in_channels=[192, 384, 768],
-        kernel_size=1,
-        out_channels=256,
-        act_cfg=None,
-        bias=True,
-        norm_cfg=dict(type='GN', num_groups=32),
-        num_outs=4),
+        type='ChannelMapperPruned',
+        checkpoint="/mnt/disks/ext/gd_checkpoints/gd_backbone_and_neck_sequential_Pruned_25.pth"
+    ),
     encoder=dict(
         num_layers=6,
         num_cp=6,
@@ -113,7 +103,15 @@ model = dict(
                 dict(type='BBoxL1Cost', weight=5.0, box_format='xywh'),
                 dict(type='IoUCost', iou_mode='giou', weight=2.0)
             ])),
-    test_cfg=dict(max_per_img=300))
+    test_cfg=dict(max_per_img=300),
+
+    init_cfg=dict(
+        type='Pretrained',
+        checkpoint=chkpt
+)
+
+
+)
 
 # dataset settings
 train_pipeline = [
@@ -172,14 +170,27 @@ train_dataloader = dict(
     dataset=dict(
         filter_cfg=dict(filter_empty_gt=False),
         pipeline=train_pipeline,
-        indices=100,
-        return_classes=True))
+        # indices=100,
+        return_classes=True
+        )
+)
+
 val_dataloader = dict(
     dataset=dict(
         pipeline=test_pipeline, 
-        indices=1,
-        return_classes=True))
+        # indices=5000,
+        return_classes=True
+    )
+)
+
 test_dataloader = val_dataloader
+
+val_evaluator = dict(
+    type='CocoMetric',
+    metric='bbox',
+    classwise=False,
+    format_only=False
+)
 
 optim_wrapper = dict(
     _delete_=True,
@@ -191,11 +202,18 @@ optim_wrapper = dict(
         'backbone': dict(lr_mult=0.1),
         'language_model': dict(lr_mult=0),
     }))
+
+
 # learning policy
 max_epochs = 2
 
 default_hooks = dict(
-    checkpoint=dict(interval=1, max_keep_ckpts=10, save_best='auto'),
+    checkpoint=dict(
+        interval=500,
+        max_keep_ckpts=13,
+        save_best='auto',
+        by_epoch=False
+    ),
     logger=dict(type='LoggerHook', interval=5))
 
 param_scheduler = [

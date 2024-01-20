@@ -3,6 +3,8 @@ import argparse
 import os
 import os.path as osp
 
+import torch
+
 from mmengine.config import Config, DictAction
 from mmengine.registry import RUNNERS
 from mmengine.runner import Runner
@@ -65,6 +67,7 @@ def main():
     setup_cache_size_limit_of_dynamo()
 
     # load config
+    # lazy_import=False
     cfg = Config.fromfile(args.config)
     cfg.launcher = args.launcher
     if args.cfg_options is not None:
@@ -112,6 +115,20 @@ def main():
         # build customized runner from the registry
         # if 'runner_type' is set in the cfg
         runner = RUNNERS.build(cfg)
+
+    # runner.val()
+
+    # # TODO(@aribra): add argument
+    # load_pruned_gd = True
+
+    # if load_pruned_gd:
+    #     gd_backbone_and_neck_model_path = "/mnt/disks/ext/gd_checkpoints/gd_backbone_and_neck_sequential_Pruned_25.pth"
+    #     gd_backbone_and_neck = torch.load(gd_backbone_and_neck_model_path)
+    #     gd_backbone_and_neck.cuda().train()
+    #     runner.model.backbone = gd_backbone_and_neck.backbone
+    #     runner.model.neck = gd_backbone_and_neck.neck
+
+    print(runner.model)
 
     # start training
     runner.train()
