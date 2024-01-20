@@ -20,6 +20,12 @@ from mmdet.registry import MODELS
 from ..layers import PatchEmbed, PatchMerging
 
 
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
 class WindowMSA(BaseModule):
     """Window based multi-head self-attention (W-MSA) module with relative
     position bias.
@@ -681,8 +687,18 @@ class SwinTransformer(BaseModule):
                 param.requires_grad = False
 
     def init_weights(self):
+        print("SWIN init_weights = ")
         logger = MMLogger.get_current_instance()
+        
+        backbone_torch_state_dict = '/mnt/disks/ext/gd_checkpoints/gd_backbone_Pruned_25_torch_state_dict.pth'
+        init_cfg = {
+            'checkpoint': backbone_torch_state_dict
+        }
+
+        self.init_cfg = dotdict(init_cfg)
+
         if self.init_cfg is None:
+            print("SWIN init_weights = in None block")
             logger.warn(f'No pre-trained weights for '
                         f'{self.__class__.__name__}, '
                         f'training start from scratch')
@@ -694,6 +710,7 @@ class SwinTransformer(BaseModule):
                 elif isinstance(m, nn.LayerNorm):
                     constant_init(m, 1.0)
         else:
+            print("SWIN init_weights = in else block")
             assert 'checkpoint' in self.init_cfg, f'Only support ' \
                                                   f'specify `Pretrained` in ' \
                                                   f'`init_cfg` in ' \
@@ -713,6 +730,7 @@ class SwinTransformer(BaseModule):
             state_dict = OrderedDict()
             for k, v in _state_dict.items():
                 if k.startswith('backbone.'):
+                    print('   SWIN init_weights - loading:', k)
                     state_dict[k[9:]] = v
 
             # strip prefix of state_dict
@@ -754,6 +772,8 @@ class SwinTransformer(BaseModule):
 
             # load state_dict
             self.load_state_dict(state_dict, False)
+
+            print("SWIN init_weights - DONE")
 
     def forward(self, x):
         x, hw_shape = self.patch_embed(x)

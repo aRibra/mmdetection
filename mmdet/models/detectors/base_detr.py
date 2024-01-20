@@ -3,11 +3,14 @@ from abc import ABCMeta, abstractmethod
 from typing import Dict, List, Tuple, Union
 
 from torch import Tensor
+from torch import load
 
 from mmdet.registry import MODELS
 from mmdet.structures import OptSampleList, SampleList
 from mmdet.utils import ConfigType, OptConfigType, OptMultiConfig
 from .base import BaseDetector
+
+import torch_pruning as tp
 
 
 @MODELS.register_module()
@@ -71,9 +74,26 @@ class DetectionTransformer(BaseDetector, metaclass=ABCMeta):
 
         # init model layers
         # torch.save(backbone, "/mnt/disks/ext/gd_checkpoints/mmdet_swin_t_backbone_cfg_dict.pth")
+
         self.backbone = MODELS.build(backbone)
+
+        pruning_mode = False
+
+        if not pruning_mode:
+            # load the pruned backbone and alter the self.backbone model
+            backbone_state_dict = load("/mnt/disks/ext/gd_checkpoints/gd_backbone_Pruned_25_tp_state_dict.pth")
+            tp.load_state_dict(self.backbone, state_dict=backbone_state_dict)
+            print("-- DetectionTransformer()/ BACKBONE model substituted with the pruned model!")
+
         if neck is not None:
             self.neck = MODELS.build(neck)
+
+            if not pruning_mode:
+                # load the pruned neck and alter the self.neck model
+                backbone_state_dict = load("/mnt/disks/ext/gd_checkpoints/gd_neck_Pruned_25_tp_state_dict.pth")
+                tp.load_state_dict(self.neck, state_dict=backbone_state_dict)
+                print("-- DetectionTransformer()/ NECK model substituted with the pruned model!")
+
         self.bbox_head = MODELS.build(bbox_head)
         self._init_layers()
 

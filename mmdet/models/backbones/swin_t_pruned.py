@@ -8,7 +8,7 @@ from torch import load
 class SwinTransformerPruned(BaseModule):
     def __init__(self, checkpoint, *args, **kwargs):
         super().__init__(*args, **kwargs)
-         
+
         self.checkpoint = checkpoint
         print("SwinTransformerPruned25()/ checkpoint", self.checkpoint)
         gd_backbone_and_neck = load(self.checkpoint)
