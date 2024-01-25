@@ -3,6 +3,8 @@ import argparse
 import os
 import os.path as osp
 
+import torch
+
 from mmengine.config import Config, DictAction
 from mmengine.registry import RUNNERS
 from mmengine.runner import Runner
@@ -65,6 +67,7 @@ def main():
     setup_cache_size_limit_of_dynamo()
 
     # load config
+    # lazy_import=False
     cfg = Config.fromfile(args.config)
     cfg.launcher = args.launcher
     if args.cfg_options is not None:
@@ -112,6 +115,8 @@ def main():
         # build customized runner from the registry
         # if 'runner_type' is set in the cfg
         runner = RUNNERS.build(cfg)
+
+    print(runner.model)
 
     # start training
     runner.train()

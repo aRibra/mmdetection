@@ -20,6 +20,12 @@ from mmdet.registry import MODELS
 from ..layers import PatchEmbed, PatchMerging
 
 
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
 class WindowMSA(BaseModule):
     """Window based multi-head self-attention (W-MSA) module with relative
     position bias.
@@ -87,9 +93,18 @@ class WindowMSA(BaseModule):
             mask (tensor | None, Optional): mask with shape of (num_windows,
                 Wh*Ww, Wh*Ww), value should be between (-inf, 0].
         """
+
+        # ??
+        # qkv = self.qkv(x)
+        # inferring the output shape directly from the qkv output
+        # because embed_dims change after pruning (using Torch-Pruning)
+        # _, _, C = qkv.shape
+        # C = C // 3
+
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
+
         # make torchscript happy (cannot use tensor as tuple)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
@@ -117,6 +132,7 @@ class WindowMSA(BaseModule):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
+        
         return x
 
     @staticmethod
@@ -250,8 +266,8 @@ class ShiftWindowMSA(BaseModule):
             x = x[:, :H, :W, :].contiguous()
 
         x = x.view(B, H * W, C)
-
         x = self.drop(x)
+        
         return x
 
     def window_reverse(self, windows, H, W):
@@ -454,11 +470,10 @@ class SwinBlockSequence(BaseModule):
         self.downsample = downsample
 
     def forward(self, x, hw_shape):
-        for block in self.blocks:
+        for block in self.blocks:            
             x = block(x, hw_shape)
-
         if self.downsample:
-            x_down, down_hw_shape = self.downsample(x, hw_shape)
+            x_down, down_hw_shape = self.downsample(x, hw_shape)            
             return x_down, down_hw_shape, x, hw_shape
         else:
             return x, hw_shape, x, hw_shape
@@ -547,6 +562,7 @@ class SwinTransformer(BaseModule):
                  convert_weights=False,
                  frozen_stages=-1,
                  init_cfg=None):
+
         self.convert_weights = convert_weights
         self.frozen_stages = frozen_stages
         if isinstance(pretrain_img_size, int):
@@ -641,12 +657,15 @@ class SwinTransformer(BaseModule):
             layer_name = f'norm{i}'
             self.add_module(layer_name, layer)
 
+        # for p in self.parameters():
+        #     p.requires_grad_(True)
+
     def train(self, mode=True):
         """Convert the model into training mode while keep layers freezed."""
         super(SwinTransformer, self).train(mode)
         self._freeze_stages()
 
-    def _freeze_stages(self):
+    def _freeze_stages(self):        
         if self.frozen_stages >= 0:
             self.patch_embed.eval()
             for param in self.patch_embed.parameters():
@@ -656,7 +675,6 @@ class SwinTransformer(BaseModule):
             self.drop_after_pos.eval()
 
         for i in range(1, self.frozen_stages + 1):
-
             if (i - 1) in self.out_indices:
                 norm_layer = getattr(self, f'norm{i-1}')
                 norm_layer.eval()
@@ -669,8 +687,18 @@ class SwinTransformer(BaseModule):
                 param.requires_grad = False
 
     def init_weights(self):
+        print("SWIN init_weights = ")
         logger = MMLogger.get_current_instance()
+        
+        backbone_torch_state_dict = '/mnt/disks/ext/gd_checkpoints/gd_backbone_Pruned_25_torch_state_dict.pth'
+        init_cfg = {
+            'checkpoint': backbone_torch_state_dict
+        }
+
+        self.init_cfg = dotdict(init_cfg)
+
         if self.init_cfg is None:
+            print("SWIN init_weights = in None block")
             logger.warn(f'No pre-trained weights for '
                         f'{self.__class__.__name__}, '
                         f'training start from scratch')
@@ -682,6 +710,7 @@ class SwinTransformer(BaseModule):
                 elif isinstance(m, nn.LayerNorm):
                     constant_init(m, 1.0)
         else:
+            print("SWIN init_weights = in else block")
             assert 'checkpoint' in self.init_cfg, f'Only support ' \
                                                   f'specify `Pretrained` in ' \
                                                   f'`init_cfg` in ' \
@@ -701,6 +730,7 @@ class SwinTransformer(BaseModule):
             state_dict = OrderedDict()
             for k, v in _state_dict.items():
                 if k.startswith('backbone.'):
+                    print('   SWIN init_weights - loading:', k)
                     state_dict[k[9:]] = v
 
             # strip prefix of state_dict
@@ -743,6 +773,8 @@ class SwinTransformer(BaseModule):
             # load state_dict
             self.load_state_dict(state_dict, False)
 
+            print("SWIN init_weights - DONE")
+
     def forward(self, x):
         x, hw_shape = self.patch_embed(x)
 
@@ -753,14 +785,14 @@ class SwinTransformer(BaseModule):
         outs = []
         for i, stage in enumerate(self.stages):
             x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
+
             if i in self.out_indices:
                 norm_layer = getattr(self, f'norm{i}')
                 out = norm_layer(out)
                 out = out.view(-1, *out_hw_shape,
                                self.num_features[i]).permute(0, 3, 1,
                                                              2).contiguous()
-                outs.append(out)
-
+                outs.append(out)                
         return outs
 
 

@@ -405,6 +405,7 @@ class PatchMerging(BaseModule):
                     (Merged_H, Merged_W).
         """
         B, L, C = x.shape
+
         assert isinstance(input_size, Sequence), f'Expect ' \
                                                  f'input_size is ' \
                                                  f'`Sequence` ' \

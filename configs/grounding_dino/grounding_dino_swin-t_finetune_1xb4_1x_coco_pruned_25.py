@@ -7,8 +7,15 @@ _base_ = [
 # original mmdet GroundingDINO weights.
 # load_from = '/mnt/disks/ext/exps/mini_coco/grounding_dino_swin-t_finetune_custom_dataset/E1/best_coco_bbox_mAP_epoch_2.pth'
 
+
 chkpt = '/mnt/disks/ext/exps/mini_coco/grounding_dino_swin-t_finetune_custom_dataset/E1/best_coco_bbox_mAP_epoch_2.pth'
 backbone_and_neck_chkpt = 'gd_backbone_and_neck_sequential_Pruned_50_state_dict.pth'
+
+# chkpt = '/mnt/disks/ext/exps/mini_coco/grounding_dino_swin-t_finetune_custom_dataset/E1/best_coco_bbox_mAP_epoch_2.pth'
+# chkpt = '/mnt/disks/ext/gd_checkpoints/E1_best_epoch_2_No_backbone_No_neck.pth'
+# backbone_torch_state_dict = '/mnt/disks/ext/gd_checkpoints/gd_backbone_Pruned_25_torch_state_dict.pth'
+# neck_torch_state_dict = '/mnt/disks/ext/gd_checkpoints/gd_neck_Pruned_25_torch_state_dict.pth'
+
 
 lang_model_name = 'bert-base-uncased'
 
