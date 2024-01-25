@@ -510,6 +510,8 @@ class GroundingDINO(DINO):
             custom_entities = batch_data_samples[0].custom_entities
         else:
             custom_entities = False
+
+        print("text_prompts = ", text_prompts)
         if len(text_prompts) == 1:
             # All the text prompts are the same,
             # so there is no need to calculate them multiple times.

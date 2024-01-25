@@ -7,10 +7,15 @@ _base_ = [
 # original mmdet GroundingDINO weights.
 # load_from = '/mnt/disks/ext/exps/mini_coco/grounding_dino_swin-t_finetune_custom_dataset/E1/best_coco_bbox_mAP_epoch_2.pth'
 
+
+chkpt = '/mnt/disks/ext/exps/mini_coco/grounding_dino_swin-t_finetune_custom_dataset/E1/best_coco_bbox_mAP_epoch_2.pth'
+backbone_and_neck_chkpt = 'gd_backbone_and_neck_sequential_Pruned_50_state_dict.pth'
+
 # chkpt = '/mnt/disks/ext/exps/mini_coco/grounding_dino_swin-t_finetune_custom_dataset/E1/best_coco_bbox_mAP_epoch_2.pth'
-chkpt = '/mnt/disks/ext/gd_checkpoints/E1_best_epoch_2_No_backbone_No_neck.pth'
-backbone_torch_state_dict = '/mnt/disks/ext/gd_checkpoints/gd_backbone_Pruned_25_torch_state_dict.pth'
-neck_torch_state_dict = '/mnt/disks/ext/gd_checkpoints/gd_neck_Pruned_25_torch_state_dict.pth'
+# chkpt = '/mnt/disks/ext/gd_checkpoints/E1_best_epoch_2_No_backbone_No_neck.pth'
+# backbone_torch_state_dict = '/mnt/disks/ext/gd_checkpoints/gd_backbone_Pruned_25_torch_state_dict.pth'
+# neck_torch_state_dict = '/mnt/disks/ext/gd_checkpoints/gd_neck_Pruned_25_torch_state_dict.pth'
+
 
 lang_model_name = 'bert-base-uncased'
 
@@ -36,34 +41,14 @@ model = dict(
         add_pooling_layer=False,
     ),
     backbone=dict(
-        type='SwinTransformer',
-        embed_dims=96,
-        depths=[2, 2, 6, 2],
-        num_heads=[3, 6, 12, 24],
-        window_size=7,
-        mlp_ratio=4,
-        qkv_bias=True,
-        qk_scale=None,
-        drop_rate=0.,
-        attn_drop_rate=0.,
-        drop_path_rate=0.2,
-        patch_norm=True,
-        out_indices=(1, 2, 3),
-        with_cp=True,
-        convert_weights=False,
-        init_cfg=dict(type='Pretrained', checkpoint=backbone_torch_state_dict)
-        ),
+        type='SwinTransformerPruned',
+        checkpoint="/mnt/disks/ext/gd_checkpoints/gd_backbone_and_neck_sequential_Pruned_25_state_dict.pth",
+        init_cfg=dict(type='Pretrained', checkpoint=chkpt)
+    ),
     neck=dict(
-        type='ChannelMapper',
-        in_channels=[192, 384, 768],
-        kernel_size=1,
-        out_channels=256,
-        act_cfg=None,
-        bias=True,
-        norm_cfg=dict(type='GN', num_groups=32),
-        num_outs=4,
-        init_cfg=dict(type='Pretrained', checkpoint=neck_torch_state_dict)
-        ),
+        type='ChannelMapperPruned',
+        checkpoint="/mnt/disks/ext/gd_checkpoints/gd_backbone_and_neck_sequential_Pruned_25_state_dict.pth"
+    ),
     encoder=dict(
         num_layers=6,
         num_cp=6,
